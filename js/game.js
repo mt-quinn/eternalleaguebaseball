@@ -122,11 +122,11 @@ class EternalLeagueBaseball {
             // Store log length before pitch
             const prevLogLength = this.simulation.playLog.length;
 
-            // Animate pitch
+            // 1. ANIMATE PITCH (pitcher to plate)
             await this.renderer.animatePitch();
-            await Utils.delay(300 / this.gameSpeed);
+            await Utils.delay(200 / this.gameSpeed);
 
-            // Simulate the pitch
+            // 2. SIMULATE THE PITCH (determines outcome)
             const result = await this.simulation.simulatePitch();
 
             // Add new log entries
@@ -138,26 +138,74 @@ class EternalLeagueBaseball {
             this.ui.updateScoreboard(this.simulation);
             this.ui.updateGameState(this.simulation);
 
-            // Handle ball in play with animations
-            if (result && result.type === 'hit') {
-                // Get the batted ball info from result
-                const battedBall = result.battedBall || { type: 'groundball', direction: 0, distance: 200 };
+            // 3. HANDLE BALL IN PLAY (if contact was made)
+            if (result && result.battedBall) {
+                const battedBall = result.battedBall;
 
-                // Animate batted ball
+                // Calculate where ball lands
+                const directionRad = (battedBall.direction / 180) * Math.PI;
+                const distanceScale = 0.6;
+                const ballLandX = this.renderer.homeplate.x + Math.sin(directionRad) * battedBall.distance * distanceScale;
+                const ballLandY = this.renderer.homeplate.y - Math.cos(directionRad) * battedBall.distance * distanceScale;
+
+                // 3a. Animate batted ball to landing spot
                 await this.renderer.animateBattedBall(battedBall);
-                await Utils.delay(500 / this.gameSpeed);
-
-                // If there was fielding, show fielder running (simplified for now)
                 await Utils.delay(300 / this.gameSpeed);
-            } else if (result && result.type === 'homerun') {
-                // Home run - show ball flying out
-                const hrBall = { type: 'flyball', direction: 0, distance: 450 };
-                await this.renderer.animateBattedBall(hrBall);
-                await Utils.delay(1000 / this.gameSpeed);
+
+                // 3b. HOME RUN - ball keeps going
+                if (result.type === 'homerun') {
+                    await Utils.delay(1500 / this.gameSpeed);
+                    // Ball returns to pitcher from stands
+                    await this.renderer.animateBallFlight(
+                        ballLandX, ballLandY,
+                        this.renderer.centerX, this.renderer.centerY - 50,
+                        800, 60
+                    );
+                }
+                // 3c. FIELDING PLAY
+                else if (result.fielder) {
+                    const fielder = result.fielder;
+                    const fielderPos = this.renderer.fieldPositions[fielder.position];
+
+                    // Fielder runs to ball
+                    await this.renderer.animateFielderToBall(fielder, ballLandX, ballLandY, 600 / this.gameSpeed);
+                    await Utils.delay(200 / this.gameSpeed);
+
+                    // If fielder throws to base
+                    if (result.throwTarget) {
+                        await this.renderer.animateThrowToBase(ballLandX, ballLandY, result.throwTarget, 500 / this.gameSpeed);
+                        await Utils.delay(400 / this.gameSpeed);
+
+                        // Ball returns from base to pitcher
+                        let basePos;
+                        if (result.throwTarget === 'first') basePos = this.renderer.firstBase;
+                        else if (result.throwTarget === 'second') basePos = this.renderer.secondBase;
+                        else if (result.throwTarget === 'third') basePos = this.renderer.thirdBase;
+                        else basePos = this.renderer.homeplate;
+
+                        await this.renderer.animateBallFlight(
+                            basePos.x, basePos.y,
+                            this.renderer.centerX, this.renderer.centerY - 50,
+                            600, 40
+                        );
+                    }
+                    // Hit - fielder throws back to pitcher
+                    else {
+                        await this.renderer.animateBallFlight(
+                            ballLandX, ballLandY,
+                            this.renderer.centerX, this.renderer.centerY - 50,
+                            700, 40
+                        );
+                    }
+                }
+            }
+            // Strikeout, walk, etc - ball just goes back to pitcher
+            else {
+                await Utils.delay(400 / this.gameSpeed);
             }
 
-            // Delay before next pitch
-            await Utils.delay(800 / this.gameSpeed);
+            // Pause before next pitch
+            await Utils.delay(1200 / this.gameSpeed);
         }
 
         // Game over

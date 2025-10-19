@@ -278,7 +278,7 @@ class BaseballSimulation {
         if (this.checkIncineration(fielder)) {
             // Fielder incinerated, ball drops for hit
             this.logPlay(`The ball falls! No one there to make the play!`);
-            return this.resolveHit(battedBall, true);
+            return this.resolveHit(battedBall, true, fielder);
         }
 
         // Fielder attempts to reach ball
@@ -286,7 +286,7 @@ class BaseballSimulation {
 
         if (!reachesball) {
             this.logPlay(`${fielder.name} can't reach it!`);
-            return this.resolveHit(battedBall, false);
+            return this.resolveHit(battedBall, false, fielder);
         }
 
         // Fielder attempts to field cleanly
@@ -294,7 +294,7 @@ class BaseballSimulation {
 
         if (!fieldsCleanly) {
             this.logPlay(`${fielder.name} bobbles the ball!`);
-            return this.resolveHit(battedBall, false);
+            return this.resolveHit(battedBall, false, fielder);
         }
 
         // Successful fielding - attempt to make out
@@ -363,7 +363,10 @@ class BaseballSimulation {
 
         if (battedBall.type === 'flyball' || battedBall.type === 'popup') {
             this.logPlay(`${fielder.name} makes the catch!`);
-            return this.resolveOut('flyout');
+            const result = this.resolveOut('flyout');
+            result.fielder = fielder;
+            result.throwTarget = null; // Caught in air, no throw needed
+            return result;
         }
 
         // Ground ball - throw to first
@@ -382,15 +385,18 @@ class BaseballSimulation {
 
         if (beatsRunner && throwSuccess > 0.6) {
             this.logPlay(`OUT at first base!`);
-            return this.resolveOut('groundout');
+            const result = this.resolveOut('groundout');
+            result.fielder = fielder;
+            result.throwTarget = 'first';
+            return result;
         } else {
             this.logPlay(`Safe at first!`);
-            return this.resolveHit(battedBall, false);
+            return this.resolveHit(battedBall, false, fielder);
         }
     }
 
     // Resolve hit (batter reaches base)
-    resolveHit(battedBall, fielderMissed) {
+    resolveHit(battedBall, fielderMissed, fielder = null) {
         // Determine how many bases (simplified - single, double, triple)
         let bases = 1;
 
@@ -423,7 +429,7 @@ class BaseballSimulation {
         this.resetCount();
         this.nextBatter();
 
-        return { type: 'hit', bases, rbis };
+        return { type: 'hit', bases, rbis, fielder, throwTarget: null };
     }
 
     // Resolve home run
