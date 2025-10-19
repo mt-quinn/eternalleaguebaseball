@@ -259,11 +259,16 @@ class BaseballSimulation {
         const pitchX = pitch.location.x;
         const pitchY = pitch.location.y;
         const distanceFromCenter = Math.sqrt(pitchX * pitchX + pitchY * pitchY);
-        const contactQuality = Math.max(0.4, 1.0 - (distanceFromCenter * 0.4)); // 0.4 to 1.0
+        const contactQuality = Math.max(0.5, 1.0 - (distanceFromCenter * 0.35)); // 0.5 to 1.0
 
-        // Exit velocity (power, contact quality, pitch velocity)
-        const baseExitVelo = (power * 0.6 + contact * 0.2 + pitchVelocity * 0.2);
-        const exitVelocity = baseExitVelo * contactQuality;
+        // Exit velocity in MPH (70-115 range for realistic baseball)
+        // MLB average exit velo: ~88 mph, elite: 95+, weak: 70-80
+        const normalizedPower = Utils.normalizeStatForProbability(power);
+        const normalizedContact = Utils.normalizeStatForProbability(contact);
+        const normalizedPitchVelo = Utils.normalizeStatForProbability(pitchVelocity);
+
+        const baseExitVelo = 70 + (normalizedPower * 30) + (normalizedContact * 10) + (normalizedPitchVelo * 10);
+        const exitVelocity = baseExitVelo * contactQuality; // 35-115 mph range
 
         // Launch angle influenced by pitch location and batter approach
         // High pitches = higher launch angle, low pitches = ground balls
@@ -315,9 +320,15 @@ class BaseballSimulation {
         const direction = Math.max(-45, Math.min(45, baseDirection + pullTendency));
 
         // Distance based on exit velocity and launch angle
-        const optimalAngle = 30; // Optimal launch angle for distance
-        const anglePenalty = Math.abs(launchAngle - optimalAngle) / 60;
-        const distance = (exitVelocity / 100) * 400 * (1 - anglePenalty);
+        // Optimal angle for distance is 25-30 degrees
+        const optimalAngle = 28;
+        const angleDiff = Math.abs(launchAngle - optimalAngle);
+        const anglePenalty = angleDiff / 50; // Penalty increases with angle deviation
+
+        // Distance formula: higher exit velo = more distance
+        // 90 mph @ optimal = ~350ft, 100 mph = ~400ft, 110 mph = ~450ft
+        const baseDistance = (exitVelocity / 110) * 450;
+        const distance = Math.max(50, baseDistance * Math.max(0.3, 1 - anglePenalty));
 
         // Calculate flight time based on ball type and distance
         // Ground balls arrive quickly, fly balls take longer
@@ -498,7 +509,7 @@ class BaseballSimulation {
         return Math.random() < fieldingProb;
     }
 
-    // Resolve successfully fielded ball
+    // Resolve successfully fielded ball (physics-based baserunning)
     resolveFieldedBall(fielder, battedBall) {
         // Force out at first base (for now, simplified)
         // TODO: Double plays, force outs at other bases
@@ -511,30 +522,71 @@ class BaseballSimulation {
             return result;
         }
 
-        // Ground ball - throw to first
+        // Ground ball - physics-based race to first
         this.logPlay(`${fielder.name} throws to first...`);
 
-        const throwAccuracy = fielder.fielding.throwingAccuracy;
-        const throwPower = fielder.fielding.throwingPower;
+        // 1. Calculate runner's time to first base
         const runnerSpeed = this.currentBatter.baserunning.speed;
+        const normalizedRunSpeed = Utils.normalizeStatForProbability(runnerSpeed);
+        // MLB average: 4.2-4.5 seconds home to first for RHB
+        // Fast runners: 3.8-4.0 seconds
+        const runnerTimeMs = 4500 - (normalizedRunSpeed * 700); // 3800-4500ms
 
-        // Check if throw beats runner (simplified)
-        const throwSuccess = Utils.normalizeStatForProbability(throwAccuracy);
-        const throwSpeed = Utils.normalizeStatForProbability(throwPower);
-        const runSpeed = Utils.normalizeStatForProbability(runnerSpeed);
+        // 2. Calculate time for ball to reach first
+        // Time = fielding time + throw time + catch time
+        const fieldingPos = this.getFielderPosition(fielder.position);
+        const firstBasePos = this.getFielderPosition('1B');
+        const throwDistance = Math.sqrt(
+            Math.pow(firstBasePos.x - fieldingPos.x, 2) +
+            Math.pow(firstBasePos.y - fieldingPos.y, 2)
+        );
 
-        const beatsRunner = (throwSuccess * throwSpeed) > (runSpeed * 0.9);
+        // Throw velocity based on throwing power (40-70 units/second)
+        const throwPower = fielder.fielding.throwingPower;
+        const normalizedThrowPower = Utils.normalizeStatForProbability(throwPower);
+        const throwVelocity = 40 + (normalizedThrowPower * 30);
 
-        if (beatsRunner && throwSuccess > 0.6) {
+        // Time for throw to reach first
+        const throwTimeMs = (throwDistance / throwVelocity) * 1000;
+
+        // Release time (how quickly fielder releases ball)
+        const fieldingSkill = fielder.fielding.fielding;
+        const normalizedFielding = Utils.normalizeStatForProbability(fieldingSkill);
+        const releaseTimeMs = 400 - (normalizedFielding * 200); // 200-400ms
+
+        // Total time for ball to reach first
+        const ballTimeMs = throwTimeMs + releaseTimeMs;
+
+        // 3. Check throwing accuracy - might make bad throw
+        const throwAccuracy = fielder.fielding.throwingAccuracy;
+        const normalizedAccuracy = Utils.normalizeStatForProbability(throwAccuracy);
+        const throwIsAccurate = Math.random() < (0.8 + normalizedAccuracy * 0.19); // 80-99% accurate
+
+        // 4. Determine outcome
+        let result;
+        if (!throwIsAccurate) {
+            this.logPlay(`Throwing error! Safe at first!`);
+            result = this.resolveHit(battedBall, false, fielder);
+        } else if (ballTimeMs < runnerTimeMs) {
+            // Ball beats runner
             this.logPlay(`OUT at first base!`);
-            const result = this.resolveOut('groundout');
+            result = this.resolveOut('groundout');
             result.fielder = fielder;
             result.throwTarget = 'first';
-            return result;
         } else {
+            // Runner beats throw
             this.logPlay(`Safe at first!`);
-            return this.resolveHit(battedBall, false, fielder);
+            result = this.resolveHit(battedBall, false, fielder);
         }
+
+        // Add timing info for animations
+        result.baserunningPhysics = {
+            runnerTimeMs,
+            ballTimeMs,
+            throwDistance
+        };
+
+        return result;
     }
 
     // Resolve hit (batter reaches base)

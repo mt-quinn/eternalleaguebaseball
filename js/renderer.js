@@ -4,15 +4,18 @@ class FieldRenderer {
     constructor(canvas) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
-        this.width = canvas.width;
-        this.height = canvas.height;
+        // Use fixed dimensions to match canvas size (700x525)
+        this.width = 700;
+        this.height = 525;
+        canvas.width = this.width;
+        canvas.height = this.height;
 
-        // Field dimensions (proper baseball diamond)
+        // Field dimensions scaled for 700x525 canvas
         this.centerX = this.width / 2;
-        this.centerY = this.height * 0.75; // Home plate near bottom
+        this.centerY = this.height - 80; // Home plate near bottom (more space for outfield)
 
-        // Base positions (90 feet apart, 45-degree diamond)
-        this.baseDistance = 120;
+        // Base positions - larger diamond to fill canvas better
+        this.baseDistance = 90; // Scale up from 120 to use more space
         this.homeplate = { x: this.centerX, y: this.centerY };
         this.firstBase = {
             x: this.centerX + this.baseDistance * Math.cos(Math.PI / 4),
@@ -27,68 +30,65 @@ class FieldRenderer {
             y: this.centerY - this.baseDistance * Math.sin(Math.PI / 4)
         };
 
-        // Fielder positions (proper baseball alignment)
+        // Fielder positions scaled proportionally
         this.fieldPositions = {
-            'P': { x: this.centerX, y: this.centerY - 50 },
-            'C': { x: this.centerX, y: this.centerY + 20 },
-            '1B': { x: this.firstBase.x + 15, y: this.firstBase.y + 15 },
-            '2B': { x: this.centerX + 60, y: this.secondBase.y + 40 },
-            '3B': { x: this.thirdBase.x - 15, y: this.thirdBase.y + 15 },
-            'SS': { x: this.centerX - 60, y: this.secondBase.y + 40 },
-            'LF': { x: this.centerX - 140, y: this.centerY - 220 },
-            'CF': { x: this.centerX, y: this.centerY - 250 },
-            'RF': { x: this.centerX + 140, y: this.centerY - 220 }
+            'P': { x: this.centerX, y: this.centerY - 40 },
+            'C': { x: this.centerX, y: this.centerY + 15 },
+            '1B': { x: this.firstBase.x + 12, y: this.firstBase.y + 12 },
+            '2B': { x: this.centerX + 45, y: this.secondBase.y + 30 },
+            '3B': { x: this.thirdBase.x - 12, y: this.thirdBase.y + 12 },
+            'SS': { x: this.centerX - 45, y: this.secondBase.y + 30 },
+            'LF': { x: this.centerX - 120, y: this.centerY - 180 },
+            'CF': { x: this.centerX, y: this.centerY - 210 },
+            'RF': { x: this.centerX + 120, y: this.centerY - 180 }
         };
 
         // Animation state
-        this.ball = null;
+        this.ball = null; // { x, y, height }
         this.animatingPlayers = new Map();
         this.isAnimating = false;
     }
 
+    // Convert batted ball distance (feet) and direction to screen coordinates
+    getBallLandingScreenPos(battedBall) {
+        const directionRad = (battedBall.direction / 180) * Math.PI;
+        // Match the physics calculation: 1 field unit = 4 feet, then scale to screen
+        const fieldDistance = battedBall.distance / 4;
+        const screenScale = 2.5; // Scale field units to screen pixels
+
+        return {
+            x: this.homeplate.x + Math.sin(directionRad) * fieldDistance * screenScale,
+            y: this.homeplate.y - Math.cos(directionRad) * fieldDistance * screenScale
+        };
+    }
+
     // Draw the entire field with proper baseball diamond
     drawField() {
-        // Clear canvas
+        // Clear canvas - base grass color
         this.ctx.fillStyle = '#0d4d0d';
         this.ctx.fillRect(0, 0, this.width, this.height);
 
-        // Draw outfield grass (arc)
+        // Draw outfield grass (darker semicircle for depth)
         this.ctx.fillStyle = '#0a3d0a';
         this.ctx.beginPath();
-        this.ctx.arc(this.centerX, this.centerY, 280, Math.PI, 0);
-        this.ctx.lineTo(this.centerX, this.centerY);
+        this.ctx.arc(this.centerX, this.centerY, 240, Math.PI, 0, false);
+        this.ctx.closePath();
         this.ctx.fill();
 
-        // Draw infield dirt (diamond shape)
+        // Draw infield dirt (diamond shape) - proper baseball infield
         this.ctx.fillStyle = '#8b6f47';
         this.ctx.beginPath();
         this.ctx.moveTo(this.homeplate.x, this.homeplate.y);
-        this.ctx.lineTo(this.firstBase.x + 25, this.firstBase.y + 25);
-        this.ctx.lineTo(this.secondBase.x, this.secondBase.y - 25);
-        this.ctx.lineTo(this.thirdBase.x - 25, this.thirdBase.y + 25);
+        this.ctx.lineTo(this.firstBase.x + 20, this.firstBase.y + 20);
+        this.ctx.lineTo(this.secondBase.x, this.secondBase.y - 20);
+        this.ctx.lineTo(this.thirdBase.x - 20, this.thirdBase.y + 20);
         this.ctx.closePath();
         this.ctx.fill();
 
-        // Draw infield grass cutout
-        this.ctx.fillStyle = '#0d4d0d';
-        this.ctx.beginPath();
-        const insetDistance = 40;
-        this.ctx.moveTo(
-            this.centerX + insetDistance * Math.cos(Math.PI / 4),
-            this.centerY - insetDistance * Math.sin(Math.PI / 4)
-        );
-        this.ctx.lineTo(this.secondBase.x + insetDistance, this.secondBase.y);
-        this.ctx.lineTo(
-            this.centerX - insetDistance * Math.cos(Math.PI / 4),
-            this.centerY - insetDistance * Math.sin(Math.PI / 4)
-        );
-        this.ctx.closePath();
-        this.ctx.fill();
-
-        // Draw pitcher's mound
+        // Draw pitcher's mound (darker dirt)
         this.ctx.fillStyle = '#7a5c3a';
         this.ctx.beginPath();
-        this.ctx.arc(this.centerX, this.centerY - 50, 18, 0, Math.PI * 2);
+        this.ctx.arc(this.centerX, this.centerY - 40, 15, 0, Math.PI * 2);
         this.ctx.fill();
 
         this.ctx.strokeStyle = '#6b4d2f';
@@ -123,20 +123,20 @@ class FieldRenderer {
         this.ctx.lineTo(this.firstBase.x, this.firstBase.y);
         this.ctx.stroke();
 
-        // Draw foul lines
+        // Draw foul lines (extend to canvas edges)
         this.ctx.strokeStyle = '#ffffff';
         this.ctx.lineWidth = 2;
 
-        // Right field line
+        // Right field line (home to right field corner)
         this.ctx.beginPath();
         this.ctx.moveTo(this.homeplate.x, this.homeplate.y);
-        this.ctx.lineTo(this.centerX + 400, this.homeplate.y - 400);
+        this.ctx.lineTo(this.width - 10, 20);
         this.ctx.stroke();
 
-        // Left field line
+        // Left field line (home to left field corner)
         this.ctx.beginPath();
         this.ctx.moveTo(this.homeplate.x, this.homeplate.y);
-        this.ctx.lineTo(this.centerX - 400, this.homeplate.y - 400);
+        this.ctx.lineTo(10, 20);
         this.ctx.stroke();
 
         // Draw bases
@@ -254,25 +254,52 @@ class FieldRenderer {
         this.drawPlayer(batterPos.x, batterPos.y, '#ffd93d', batter.name, true);
     }
 
-    // Draw ball
-    drawBall(x, y, shadow = true) {
-        // Draw shadow if ball is in air
-        if (shadow && y < this.centerY - 10) {
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    // Draw ball in top-down view with height
+    drawBall(x, y, height = 0) {
+        // In top-down view, height affects:
+        // 1. Shadow position (always on ground)
+        // 2. Ball size (smaller when higher)
+        // 3. Ball position offset (perspective effect)
+
+        // Draw shadow on ground (darker and smaller when ball is higher)
+        if (height > 0) {
+            const shadowOpacity = Math.min(0.4, 0.1 + (height / 100) * 0.3);
+            const shadowSize = 6 - (height / 100) * 2; // Smaller shadow when higher
+            this.ctx.fillStyle = `rgba(0, 0, 0, ${shadowOpacity})`;
             this.ctx.beginPath();
-            this.ctx.ellipse(x, this.centerY, 8, 4, 0, 0, Math.PI * 2);
+            this.ctx.ellipse(x, y, shadowSize, shadowSize * 0.5, 0, 0, Math.PI * 2);
             this.ctx.fill();
         }
 
-        // Draw ball
+        // Ball appears offset up and slightly left for perspective (higher = more offset)
+        const perspectiveOffset = (height / 100) * 30; // Max 30 pixels up
+        const ballX = x - (height / 100) * 5; // Slight left offset
+        const ballY = y - perspectiveOffset;
+
+        // Ball size scales with height (smaller when higher = farther from "camera")
+        const baseRadius = 6;
+        const heightScale = 1 - (height / 100) * 0.4; // Max 40% smaller
+        const ballRadius = baseRadius * Math.max(0.6, heightScale);
+
+        // Draw ball with white fill and red stitching
         this.ctx.fillStyle = '#ffffff';
         this.ctx.beginPath();
-        this.ctx.arc(x, y, 6, 0, Math.PI * 2);
+        this.ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
         this.ctx.fill();
 
+        // Red stitching
         this.ctx.strokeStyle = '#ff0000';
         this.ctx.lineWidth = 1.5;
         this.ctx.stroke();
+
+        // Add slight glow when ball is high (in flight)
+        if (height > 20) {
+            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            this.ctx.lineWidth = 3;
+            this.ctx.beginPath();
+            this.ctx.arc(ballX, ballY, ballRadius + 2, 0, Math.PI * 2);
+            this.ctx.stroke();
+        }
     }
 
     // ANIMATION: Pitch (pitcher to plate)
@@ -326,7 +353,7 @@ class FieldRenderer {
         return this.animateBallFlight(startX, startY, endX, endY, duration, arcHeight);
     }
 
-    // ANIMATION: Ball flight with arc
+    // ANIMATION: Ball flight with arc (proper top-down view)
     async animateBallFlight(startX, startY, endX, endY, duration, arcHeight) {
         this.isAnimating = true;
         const startTime = Date.now();
@@ -336,15 +363,15 @@ class FieldRenderer {
                 const elapsed = Date.now() - startTime;
                 const progress = Math.min(elapsed / duration, 1);
 
+                // Field position (x, y on the ground)
                 const x = Utils.lerp(startX, endX, progress);
-                let y = Utils.lerp(startY, endY, progress);
+                const y = Utils.lerp(startY, endY, progress);
 
-                // Add parabolic arc
-                if (arcHeight > 0) {
-                    y -= Math.sin(progress * Math.PI) * arcHeight;
-                }
+                // Height above field (parabolic arc)
+                // Height is 0 at start and end, peaks at middle
+                const height = arcHeight > 0 ? Math.sin(progress * Math.PI) * arcHeight : 0;
 
-                this.ball = { x, y };
+                this.ball = { x, y, height };
 
                 if (progress < 1) {
                     requestAnimationFrame(animate);
@@ -481,11 +508,24 @@ class FieldRenderer {
         this.drawField();
         this.drawFielders(fieldingTeam);
         this.drawRunners(simulation.bases);
-        this.drawBatter(simulation.currentBatter);
 
-        // Draw ball if animating
+        // Draw animating baserunners (runners in motion)
+        for (const [key, pos] of this.animatingPlayers.entries()) {
+            if (key.startsWith('runner-')) {
+                // Draw running batter/runner in yellow
+                this.drawPlayer(pos.x, pos.y, '#ffd93d', '', false);
+            }
+        }
+
+        // Draw batter at plate (unless they're animating as a runner)
+        const batterIsRunning = this.animatingPlayers.has(`runner-${simulation.currentBatter?.id}`);
+        if (!batterIsRunning) {
+            this.drawBatter(simulation.currentBatter);
+        }
+
+        // Draw ball if animating (with height for top-down perspective)
         if (this.ball) {
-            this.drawBall(this.ball.x, this.ball.y);
+            this.drawBall(this.ball.x, this.ball.y, this.ball.height || 0);
         }
     }
 }

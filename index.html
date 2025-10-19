@@ -59,41 +59,43 @@
             <!-- Game Simulation Phase -->
             <div id="game-phase" class="game-phase hidden">
                 <div id="game-view">
-                    <div id="scoreboard">
-                        <div class="score-panel">
-                            <span class="team-name" id="score-home-name">Home</span>
-                            <span class="score" id="score-home">0</span>
-                        </div>
-                        <div class="inning-display">
-                            <span id="inning-text">Top 1st</span>
-                        </div>
-                        <div class="score-panel">
-                            <span class="team-name" id="score-away-name">Away</span>
-                            <span class="score" id="score-away">0</span>
-                        </div>
-                    </div>
+                    <canvas id="field-canvas" width="700" height="525"></canvas>
 
-                    <div id="game-state-display">
-                        <span id="outs-display">Outs: 0</span>
-                        <span id="count-display">Count: 0-0</span>
-                        <div id="bases-display">
-                            <span id="base-1" class="base empty">1B</span>
-                            <span id="base-2" class="base empty">2B</span>
-                            <span id="base-3" class="base empty">3B</span>
+                    <div class="game-sidebar">
+                        <div id="scoreboard">
+                            <div class="score-panel">
+                                <span class="team-name" id="score-home-name">Home</span>
+                                <span class="score" id="score-home">0</span>
+                            </div>
+                            <div class="inning-display">
+                                <span id="inning-text">Top 1st</span>
+                            </div>
+                            <div class="score-panel">
+                                <span class="team-name" id="score-away-name">Away</span>
+                                <span class="score" id="score-away">0</span>
+                            </div>
                         </div>
-                    </div>
 
-                    <canvas id="field-canvas" width="800" height="600"></canvas>
+                        <div id="game-state-display">
+                            <span id="outs-display">Outs: 0</span>
+                            <span id="count-display">Count: 0-0</span>
+                            <div id="bases-display">
+                                <span id="base-1" class="base empty"><span>1B</span></span>
+                                <span id="base-2" class="base empty"><span>2B</span></span>
+                                <span id="base-3" class="base empty"><span>3B</span></span>
+                            </div>
+                        </div>
 
-                    <div id="play-by-play">
-                        <h3>Play-by-Play</h3>
-                        <div id="play-log"></div>
-                    </div>
+                        <div id="play-by-play">
+                            <h3>Play-by-Play</h3>
+                            <div id="play-log"></div>
+                        </div>
 
-                    <div id="game-controls">
-                        <button id="pause-btn">Pause</button>
-                        <button id="speed-btn">Speed: 2x</button>
-                        <button id="skip-btn">Skip to End</button>
+                        <div id="game-controls">
+                            <button id="pause-btn">Pause</button>
+                            <button id="speed-btn">Speed: 2x</button>
+                            <button id="skip-btn">Skip to End</button>
+                        </div>
                     </div>
                 </div>
             </div>
