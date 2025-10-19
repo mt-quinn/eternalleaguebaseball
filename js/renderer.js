@@ -511,7 +511,9 @@ class FieldRenderer {
 
         // Draw animating baserunners (runners in motion)
         for (const [key, pos] of this.animatingPlayers.entries()) {
-            if (key.startsWith('runner-')) {
+            // Convert key to string to safely check if it's a runner
+            const keyStr = String(key);
+            if (keyStr.startsWith('runner-')) {
                 // Draw running batter/runner in yellow
                 this.drawPlayer(pos.x, pos.y, '#ffd93d', '', false);
             }
