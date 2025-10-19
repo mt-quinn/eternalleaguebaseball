@@ -148,9 +148,9 @@ class EternalLeagueBaseball {
                 const ballLandX = this.renderer.homeplate.x + Math.sin(directionRad) * battedBall.distance * distanceScale;
                 const ballLandY = this.renderer.homeplate.y - Math.cos(directionRad) * battedBall.distance * distanceScale;
 
-                // 3a. Animate batted ball to landing spot
-                await this.renderer.animateBattedBall(battedBall);
-                await Utils.delay(300 / this.gameSpeed);
+                // 3a. Animate batted ball to landing spot (use actual flight time)
+                await this.renderer.animateBattedBallPhysics(battedBall, ballLandX, ballLandY, this.gameSpeed);
+                await Utils.delay(200 / this.gameSpeed);
 
                 // 3b. HOME RUN - ball keeps going
                 if (result.type === 'homerun') {
@@ -159,16 +159,17 @@ class EternalLeagueBaseball {
                     await this.renderer.animateBallFlight(
                         ballLandX, ballLandY,
                         this.renderer.centerX, this.renderer.centerY - 50,
-                        800, 60
+                        800 / this.gameSpeed, 60
                     );
                 }
                 // 3c. FIELDING PLAY
-                else if (result.fielder) {
+                else if (result.fielder && result.fieldingPhysics) {
                     const fielder = result.fielder;
-                    const fielderPos = this.renderer.fieldPositions[fielder.position];
+                    const physics = result.fieldingPhysics;
 
-                    // Fielder runs to ball
-                    await this.renderer.animateFielderToBall(fielder, ballLandX, ballLandY, 600 / this.gameSpeed);
+                    // Fielder runs to ball at realistic speed
+                    const fielderMoveDuration = Math.min(physics.timeToReachBall, physics.ballFlightTime);
+                    await this.renderer.animateFielderToBall(fielder, ballLandX, ballLandY, fielderMoveDuration / this.gameSpeed);
                     await Utils.delay(200 / this.gameSpeed);
 
                     // If fielder throws to base
@@ -186,7 +187,7 @@ class EternalLeagueBaseball {
                         await this.renderer.animateBallFlight(
                             basePos.x, basePos.y,
                             this.renderer.centerX, this.renderer.centerY - 50,
-                            600, 40
+                            600 / this.gameSpeed, 40
                         );
                     }
                     // Hit - fielder throws back to pitcher
@@ -194,7 +195,7 @@ class EternalLeagueBaseball {
                         await this.renderer.animateBallFlight(
                             ballLandX, ballLandY,
                             this.renderer.centerX, this.renderer.centerY - 50,
-                            700, 40
+                            700 / this.gameSpeed, 40
                         );
                     }
                 }

@@ -196,63 +196,141 @@ class BaseballSimulation {
         return Math.random() < swingAtStrikeProb;
     }
 
-    // Resolve contact attempt
+    // Resolve contact attempt (physics-based: timing and location)
     resolveContact(pitch) {
         const contact = this.currentBatter.batting.contact;
+        const discipline = this.currentBatter.batting.discipline;
+        const power = this.currentBatter.batting.power;
+
+        // 1. TIMING: Can the batter time their swing to meet the ball?
+        // Faster pitches = smaller timing window
+        const pitchSpeed = pitch.velocity;
+        const timingWindowMs = 150 - (Utils.normalizeStatForProbability(pitchSpeed) * 50); // 100-150ms window
+
+        // Batter's contact skill determines how precisely they can time the swing
+        const batterTiming = Utils.normalizeStatForProbability(contact) * 150; // 0-150ms precision
+
+        // Random swing timing error (simulates human variance)
+        const swingTimingError = (Math.random() - 0.5) * 100; // ±50ms
+        const actualTiming = batterTiming + swingTimingError;
+
+        // Does the swing timing fall within the window?
+        const timingSuccess = actualTiming >= (timingWindowMs * 0.5);
+
+        // 2. LOCATION: Is the bat in the right place to meet the ball?
+        const pitchX = pitch.location.x; // -1 to 1 (inside/outside)
+        const pitchY = pitch.location.y; // -1 to 1 (high/low)
+
+        // Batter's discipline determines how well they can identify pitch location
+        const locationReadSkill = Utils.normalizeStatForProbability(discipline);
+
+        // Bat placement error (better contact = less error)
+        const batPlacementError = (1 - Utils.normalizeStatForProbability(contact)) * 0.5;
+
+        // Calculate distance from bat to ball
+        const batX = pitchX + (Math.random() - 0.5) * batPlacementError * 2;
+        const batY = pitchY + (Math.random() - 0.5) * batPlacementError * 2;
+        const distance = Math.sqrt(Math.pow(pitchX - batX, 2) + Math.pow(pitchY - batY, 2));
+
+        // Contact zone radius (power hitters have bigger "barrel")
+        const contactRadius = 0.5 + (Utils.normalizeStatForProbability(power) * 0.3);
+        const locationSuccess = distance <= contactRadius;
+
+        // 3. PITCH QUALITY: Harder to make contact with better pitches
         const pitchQuality = pitch.quality;
+        const pitchDifficultyMod = Utils.normalizeStatForProbability(pitchQuality) * 0.2;
 
-        // MLB average contact rate on swings: ~75%
-        // Better contact skill vs worse pitch quality = more contact
-        const baseContactProb = 0.75;
-        const contactMod = (Utils.normalizeStatForProbability(contact) - 0.5) * 0.3;
-        const pitchMod = (Utils.normalizeStatForProbability(pitchQuality) - 0.5) * -0.2;
+        // Final check: both timing and location must succeed (with pitch difficulty modifier)
+        const baseSuccess = timingSuccess && locationSuccess;
+        const finalChance = baseSuccess ? (1.0 - pitchDifficultyMod) : 0.2; // Small chance of lucky contact
 
-        const contactProb = baseContactProb + contactMod + pitchMod;
-
-        return Math.random() < contactProb;
+        return Math.random() < finalChance;
     }
 
-    // Determine batted ball trajectory and type
+    // Determine batted ball trajectory and type (physics-based on contact point)
     resolveBattedBall(pitch) {
         const power = this.currentBatter.batting.power;
         const aggression = this.currentBatter.batting.aggression;
+        const contact = this.currentBatter.batting.contact;
         const pitchVelocity = pitch.velocity;
 
-        // Exit velocity (combination of power, aggression, pitch velocity)
-        const exitVelocity = (power * 0.6 + aggression * 0.2 + pitchVelocity * 0.2);
+        // Contact quality based on pitch location
+        // Center of strike zone = best contact, edges = weaker contact
+        const pitchX = pitch.location.x;
+        const pitchY = pitch.location.y;
+        const distanceFromCenter = Math.sqrt(pitchX * pitchX + pitchY * pitchY);
+        const contactQuality = Math.max(0.4, 1.0 - (distanceFromCenter * 0.4)); // 0.4 to 1.0
 
-        // Launch angle influenced by aggression (higher aggression = more fly balls)
-        // MLB: ~20% ground balls, ~20% line drives, ~40% fly balls, ~20% pop ups
-        const launchAngleRoll = Math.random();
+        // Exit velocity (power, contact quality, pitch velocity)
+        const baseExitVelo = (power * 0.6 + contact * 0.2 + pitchVelocity * 0.2);
+        const exitVelocity = baseExitVelo * contactQuality;
+
+        // Launch angle influenced by pitch location and batter approach
+        // High pitches = higher launch angle, low pitches = ground balls
+        const pitchHeightInfluence = pitchY * 20; // -20 to +20 degrees
         const aggressionFactor = Utils.normalizeStatForProbability(aggression);
 
-        let type, launchAngle, description;
+        // Base launch angle depends on swing approach
+        const launchAngleRoll = Math.random();
+        let baseLaunchAngle;
+        let type, description;
 
         if (launchAngleRoll < 0.25) {
+            // Ground ball tendency
+            baseLaunchAngle = Utils.random(-10, 5);
             type = 'groundball';
-            launchAngle = Utils.random(-10, 10);
             description = 'A ground ball';
         } else if (launchAngleRoll < 0.45) {
+            // Line drive tendency
+            baseLaunchAngle = Utils.random(10, 20);
             type = 'linedrive';
-            launchAngle = Utils.random(10, 25);
             description = 'A line drive';
         } else if (launchAngleRoll < 0.45 + (0.45 * aggressionFactor)) {
+            // Fly ball tendency (more likely with high aggression)
+            baseLaunchAngle = Utils.random(25, 40);
             type = 'flyball';
-            launchAngle = Utils.random(25, 45);
             description = 'A fly ball';
         } else {
+            // Pop up (weak contact or topped ball)
+            baseLaunchAngle = Utils.random(50, 75);
             type = 'popup';
-            launchAngle = Utils.random(50, 80);
             description = 'A pop up';
         }
 
-        // Direction (left, center, right)
-        const direction = Utils.random(-45, 45);
+        // Final launch angle = base + pitch height influence
+        const launchAngle = Math.max(-15, Math.min(85, baseLaunchAngle + pitchHeightInfluence));
+
+        // Adjust type based on final angle
+        if (launchAngle < 10 && type !== 'groundball') {
+            type = 'groundball';
+            description = 'A ground ball';
+        } else if (launchAngle > 50 && type === 'flyball') {
+            type = 'popup';
+            description = 'A pop up';
+        }
+
+        // Direction influenced by pitch location (inside = pulled, outside = opposite field)
+        const pullTendency = -pitchX * 30; // Inside pitch = negative (pull for right-hander)
+        const baseDirection = Utils.random(-45, 45);
+        const direction = Math.max(-45, Math.min(45, baseDirection + pullTendency));
 
         // Distance based on exit velocity and launch angle
         const optimalAngle = 30; // Optimal launch angle for distance
         const anglePenalty = Math.abs(launchAngle - optimalAngle) / 60;
         const distance = (exitVelocity / 100) * 400 * (1 - anglePenalty);
+
+        // Calculate flight time based on ball type and distance
+        // Ground balls arrive quickly, fly balls take longer
+        let flightTime; // in milliseconds
+        if (type === 'groundball') {
+            flightTime = 800 + (distance / 400) * 400; // 800-1200ms
+        } else if (type === 'linedrive') {
+            flightTime = 1000 + (distance / 400) * 500; // 1000-1500ms
+        } else if (type === 'flyball') {
+            flightTime = 1500 + (distance / 400) * 1500; // 1500-3000ms
+        } else { // popup
+            flightTime = 2000 + (distance / 200) * 1000; // 2000-3000ms
+        }
 
         return {
             type,
@@ -260,6 +338,7 @@ class BaseballSimulation {
             exitVelocity,
             direction,
             distance,
+            flightTime,
             description
         };
     }
@@ -281,12 +360,29 @@ class BaseballSimulation {
             return this.resolveHit(battedBall, true, fielder);
         }
 
+        // Calculate fielding physics
+        const fielderPos = this.getFielderPosition(fielder.position);
+        const ballLandPos = this.getBallLandingPosition(battedBall);
+        const dx = ballLandPos.x - fielderPos.x;
+        const dy = ballLandPos.y - fielderPos.y;
+        const distanceToTravel = Math.sqrt(dx * dx + dy * dy);
+
+        const speed = fielder.fielding.speed;
+        const reaction = fielder.fielding.reactionTime;
+        const reactionDelay = 500 - (Utils.normalizeStatForProbability(reaction) * 400);
+        const fielderSpeed = 15 + (Utils.normalizeStatForProbability(speed) * 30);
+
+        // Time to reach ball (distance / speed + reaction)
+        const timeToReachBall = reactionDelay + (distanceToTravel / fielderSpeed) * 1000;
+
         // Fielder attempts to reach ball
         const reachesball = this.fielderReachesBall(fielder, battedBall);
 
         if (!reachesball) {
             this.logPlay(`${fielder.name} can't reach it!`);
-            return this.resolveHit(battedBall, false, fielder);
+            const result = this.resolveHit(battedBall, false, fielder);
+            result.fieldingPhysics = { timeToReachBall, ballFlightTime: battedBall.flightTime, distanceToTravel };
+            return result;
         }
 
         // Fielder attempts to field cleanly
@@ -294,12 +390,16 @@ class BaseballSimulation {
 
         if (!fieldsCleanly) {
             this.logPlay(`${fielder.name} bobbles the ball!`);
-            return this.resolveHit(battedBall, false, fielder);
+            const result = this.resolveHit(battedBall, false, fielder);
+            result.fieldingPhysics = { timeToReachBall, ballFlightTime: battedBall.flightTime, distanceToTravel };
+            return result;
         }
 
         // Successful fielding - attempt to make out
         this.logPlay(`${fielder.name} fields it cleanly!`);
-        return this.resolveFieldedBall(fielder, battedBall);
+        const result = this.resolveFieldedBall(fielder, battedBall);
+        result.fieldingPhysics = { timeToReachBall, ballFlightTime: battedBall.flightTime, distanceToTravel };
+        return result;
     }
 
     // Determine which fielder handles the ball
@@ -322,28 +422,70 @@ class BaseballSimulation {
         }
     }
 
-    // Check if fielder reaches ball
+    // Check if fielder reaches ball (physics-based)
     fielderReachesBall(fielder, battedBall) {
         const speed = fielder.fielding.speed;
         const reaction = fielder.fielding.reactionTime;
 
-        // Different ball types have different difficulty
-        let baseDifficulty = 0.85; // 85% catch rate for average fielder
+        // Calculate fielder's starting position in field units
+        const fielderPos = this.getFielderPosition(fielder.position);
 
-        if (battedBall.type === 'linedrive') {
-            baseDifficulty = 0.70; // Line drives harder
-        } else if (battedBall.type === 'groundball') {
-            baseDifficulty = 0.90; // Ground balls easier to reach
-        } else if (battedBall.type === 'popup') {
-            baseDifficulty = 0.95; // Pop ups easiest
-        }
+        // Calculate where ball lands in field units
+        const ballLandPos = this.getBallLandingPosition(battedBall);
 
-        const speedMod = (Utils.normalizeStatForProbability(speed) - 0.5) * 0.2;
-        const reactionMod = (Utils.normalizeStatForProbability(reaction) - 0.5) * 0.1;
+        // Calculate distance fielder needs to cover
+        const dx = ballLandPos.x - fielderPos.x;
+        const dy = ballLandPos.y - fielderPos.y;
+        const distanceToTravel = Math.sqrt(dx * dx + dy * dy);
 
-        const reachProb = baseDifficulty + speedMod + reactionMod;
+        // Reaction time delay (better reaction = less delay)
+        // Range: 100ms to 500ms
+        const reactionDelay = 500 - (Utils.normalizeStatForProbability(reaction) * 400);
 
-        return Math.random() < reachProb;
+        // Calculate fielder speed in field units per second
+        // Speed stat range: 0-100, maps to ~15-45 units/sec (roughly 5-15 mph)
+        const fielderSpeed = 15 + (Utils.normalizeStatForProbability(speed) * 30);
+
+        // Time available to reach ball (flight time minus reaction time)
+        const timeAvailable = Math.max(0, battedBall.flightTime - reactionDelay);
+
+        // Distance fielder can cover in available time
+        const maxDistance = (fielderSpeed * timeAvailable) / 1000;
+
+        // Add some randomness for variation (±10%)
+        const randomFactor = 0.9 + Math.random() * 0.2;
+
+        // Can the fielder reach it?
+        return (maxDistance * randomFactor) >= distanceToTravel;
+    }
+
+    // Get fielder position in field coordinates (abstract units)
+    getFielderPosition(position) {
+        // Field coordinate system: home plate at (0, 0), center field at (0, 100)
+        const positions = {
+            'P': { x: 0, y: 20 },
+            'C': { x: 0, y: -5 },
+            '1B': { x: 30, y: 30 },
+            '2B': { x: 25, y: 50 },
+            '3B': { x: -30, y: 30 },
+            'SS': { x: -25, y: 50 },
+            'LF': { x: -60, y: 90 },
+            'CF': { x: 0, y: 100 },
+            'RF': { x: 60, y: 90 }
+        };
+        return positions[position] || { x: 0, y: 50 };
+    }
+
+    // Get ball landing position in field coordinates
+    getBallLandingPosition(battedBall) {
+        const directionRad = (battedBall.direction / 180) * Math.PI;
+        // Distance in feet maps to field units (scale: 1 unit ≈ 4 feet)
+        const fieldDistance = battedBall.distance / 4;
+
+        return {
+            x: Math.sin(directionRad) * fieldDistance,
+            y: Math.cos(directionRad) * fieldDistance
+        };
     }
 
     // Check if fielder fields ball cleanly

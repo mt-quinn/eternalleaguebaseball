@@ -285,7 +285,7 @@ class FieldRenderer {
         return this.animateBallFlight(startX, startY, endX, endY, 400, 0);
     }
 
-    // ANIMATION: Batted ball
+    // ANIMATION: Batted ball (legacy, kept for compatibility)
     async animateBattedBall(battedBall, fielder) {
         const startX = this.homeplate.x;
         const startY = this.homeplate.y - 10;
@@ -304,6 +304,24 @@ class FieldRenderer {
         else if (battedBall.type === 'groundball') arcHeight = 10;
 
         const duration = battedBall.type === 'groundball' ? 800 : 1200;
+
+        return this.animateBallFlight(startX, startY, endX, endY, duration, arcHeight);
+    }
+
+    // ANIMATION: Batted ball with physics-based timing
+    async animateBattedBallPhysics(battedBall, endX, endY, gameSpeed) {
+        const startX = this.homeplate.x;
+        const startY = this.homeplate.y - 10;
+
+        // Arc height based on ball type
+        let arcHeight = 0;
+        if (battedBall.type === 'flyball') arcHeight = 80;
+        else if (battedBall.type === 'popup') arcHeight = 120;
+        else if (battedBall.type === 'linedrive') arcHeight = 30;
+        else if (battedBall.type === 'groundball') arcHeight = 10;
+
+        // Use the actual flight time from physics
+        const duration = battedBall.flightTime / gameSpeed;
 
         return this.animateBallFlight(startX, startY, endX, endY, duration, arcHeight);
     }
