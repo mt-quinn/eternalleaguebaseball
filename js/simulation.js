@@ -74,7 +74,14 @@ class BaseballSimulation {
 
     updateCurrentBatter() {
         const battingTeam = this.isTopInning ? this.awayTeam : this.homeTeam;
+        if (!battingTeam || !battingTeam.lineup || battingTeam.lineup.length === 0) {
+            console.error('Invalid batting team or lineup');
+            return;
+        }
         this.currentBatter = battingTeam.lineup[this.currentBatterIndex];
+        if (!this.currentBatter) {
+            console.error('Current batter is undefined at index', this.currentBatterIndex, 'lineup length:', battingTeam.lineup.length);
+        }
     }
 
     // Main simulation step - simulates one pitch
@@ -132,7 +139,14 @@ class BaseballSimulation {
         this.logPlay(`${this.currentBatter.name} makes contact! ${battedBall.description}`);
 
         // 5. Simulate ball in play
-        return this.resolveBallInPlay(battedBall);
+        const playResult = await this.resolveBallInPlay(battedBall);
+
+        // Include batted ball info in result for animations
+        if (playResult) {
+            playResult.battedBall = battedBall;
+        }
+
+        return playResult;
     }
 
     // Generate pitch with location and quality
@@ -546,9 +560,13 @@ class BaseballSimulation {
 
     // Next batter in lineup
     nextBatter() {
-        this.currentBatterIndex = (this.currentBatterIndex + 1) % 9;
+        const battingTeam = this.isTopInning ? this.awayTeam : this.homeTeam;
+        const lineupLength = battingTeam.lineup.length;
+        this.currentBatterIndex = (this.currentBatterIndex + 1) % lineupLength;
         this.updateCurrentBatter();
-        this.logPlay(`${this.currentBatter.name} steps up to the plate.`);
+        if (this.currentBatter) {
+            this.logPlay(`${this.currentBatter.name} steps up to the plate.`);
+        }
     }
 
     // End half inning

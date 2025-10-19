@@ -25,6 +25,9 @@ class Team {
             this.roster.push(player);
             this.lineup.push(player);
         });
+
+        // Add pitcher to lineup (bats 9th, as in National League rules)
+        this.lineup.push(pitcher);
     }
 
     // Get player by position

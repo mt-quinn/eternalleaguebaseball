@@ -25,6 +25,21 @@ class EternalLeagueBaseball {
     }
 
     async initialize() {
+        // Clear old saves that might have 8-player lineups
+        // TODO: Remove this migration code after a few weeks
+        const saveData = localStorage.getItem('eternalLeagueBaseball');
+        if (saveData) {
+            try {
+                const data = JSON.parse(saveData);
+                if (!data.version || data.version < 1) {
+                    console.log('Clearing old save data...');
+                    localStorage.removeItem('eternalLeagueBaseball');
+                }
+            } catch (e) {
+                localStorage.removeItem('eternalLeagueBaseball');
+            }
+        }
+
         // Try to load saved game
         const loaded = this.loadGame();
 
@@ -77,67 +92,78 @@ class EternalLeagueBaseball {
             this.ui.addPlayLog(entry);
         });
 
-        // Start game loop
-        this.lastPitchTime = Date.now();
-        this.gameLoop();
+        // Start render loop (60fps)
+        this.renderLoop();
+
+        // Start pitch loop (handles game logic with animations)
+        this.pitchLoop();
     }
 
-    async gameLoop() {
-        if (!this.isSimulating || this.simulation.isGameOver) {
-            if (this.simulation.isGameOver) {
-                this.endGame();
+    // Continuous render loop at 60fps
+    renderLoop() {
+        if (!this.isSimulating && !this.renderer.isAnimating) {
+            return;
+        }
+
+        const fieldingTeam = this.simulation.isTopInning ? this.simulation.homeTeam : this.simulation.awayTeam;
+        this.renderer.renderGameState(this.simulation, fieldingTeam);
+
+        requestAnimationFrame(() => this.renderLoop());
+    }
+
+    // Game logic loop with animations
+    async pitchLoop() {
+        while (this.isSimulating && !this.simulation.isGameOver) {
+            if (this.isPaused) {
+                await Utils.delay(100);
+                continue;
             }
-            return;
-        }
 
-        if (this.isPaused) {
-            requestAnimationFrame(() => this.gameLoop());
-            return;
-        }
+            // Store log length before pitch
+            const prevLogLength = this.simulation.playLog.length;
 
-        const now = Date.now();
-        const adjustedDelay = this.pitchDelay / this.gameSpeed;
+            // Animate pitch
+            await this.renderer.animatePitch();
+            await Utils.delay(300 / this.gameSpeed);
 
-        if (now - this.lastPitchTime >= adjustedDelay) {
-            this.lastPitchTime = now;
-
-            // Simulate one pitch
+            // Simulate the pitch
             const result = await this.simulation.simulatePitch();
+
+            // Add new log entries
+            for (let i = prevLogLength; i < this.simulation.playLog.length; i++) {
+                this.ui.addPlayLog(this.simulation.playLog[i]);
+            }
 
             // Update UI
             this.ui.updateScoreboard(this.simulation);
             this.ui.updateGameState(this.simulation);
 
-            // Add new play log entries
-            const lastLogIndex = this.simulation.playLog.length - 1;
-            if (lastLogIndex >= 0) {
-                const newEntries = this.simulation.playLog.slice(-5); // Last 5 entries
-                newEntries.forEach(entry => {
-                    if (entry.timestamp > now - adjustedDelay) {
-                        this.ui.addPlayLog(entry);
-
-                        // Check for incineration - add to graveyard
-                        if (entry.incineration) {
-                            // Find the incinerated player in the log
-                            const match = entry.message.match(/⚡ (.+) HAS BEEN INCINERATED/);
-                            if (match) {
-                                // Player already replaced in simulation, just logging
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Render field
-            this.renderer.renderGameState(this.simulation);
-
-            // Animate ball if applicable
+            // Handle ball in play with animations
             if (result && result.type === 'hit') {
-                // TODO: Add ball animation for hits
+                // Get the batted ball info from result
+                const battedBall = result.battedBall || { type: 'groundball', direction: 0, distance: 200 };
+
+                // Animate batted ball
+                await this.renderer.animateBattedBall(battedBall);
+                await Utils.delay(500 / this.gameSpeed);
+
+                // If there was fielding, show fielder running (simplified for now)
+                await Utils.delay(300 / this.gameSpeed);
+            } else if (result && result.type === 'homerun') {
+                // Home run - show ball flying out
+                const hrBall = { type: 'flyball', direction: 0, distance: 450 };
+                await this.renderer.animateBattedBall(hrBall);
+                await Utils.delay(1000 / this.gameSpeed);
             }
+
+            // Delay before next pitch
+            await Utils.delay(800 / this.gameSpeed);
         }
 
-        requestAnimationFrame(() => this.gameLoop());
+        // Game over
+        if (this.simulation.isGameOver) {
+            this.endGame();
+        }
     }
 
     endGame() {
@@ -243,17 +269,8 @@ class EternalLeagueBaseball {
     }
 
     skipToEnd() {
-        // Fast-forward through all remaining pitches
+        // Fast-forward by setting speed to max
         this.gameSpeed = 100; // Super fast
-
-        const skipLoop = async () => {
-            while (!this.simulation.isGameOver) {
-                await this.simulation.simulatePitch();
-            }
-            this.endGame();
-        };
-
-        skipLoop();
     }
 
     // Economy actions
