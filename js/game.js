@@ -147,18 +147,19 @@ class EternalLeagueBaseball {
                 const ballLandX = ballLandPos.x;
                 const ballLandY = ballLandPos.y;
 
-                // 3a. Animate batted ball to landing spot (use actual flight time)
-                await this.renderer.animateBattedBallPhysics(battedBall, ballLandX, ballLandY, this.gameSpeed);
+                // 3a. Animate batted ball to landing spot (keep ball visible)
+                await this.renderer.animateBattedBallPhysics(battedBall, ballLandX, ballLandY, this.gameSpeed, false);
                 await Utils.delay(200 / this.gameSpeed);
 
                 // 3b. HOME RUN - ball keeps going
                 if (result.type === 'homerun') {
                     await Utils.delay(1500 / this.gameSpeed);
                     // Ball returns to pitcher from stands
+                    const pitcherPos = this.renderer.fieldPositions['P'];
                     await this.renderer.animateBallFlight(
                         ballLandX, ballLandY,
-                        this.renderer.centerX, this.renderer.centerY - 50,
-                        800 / this.gameSpeed, 60
+                        pitcherPos.x, pitcherPos.y,
+                        800 / this.gameSpeed, 60, true
                     );
                 }
                 // 3c. FIELDING PLAY
@@ -178,10 +179,12 @@ class EternalLeagueBaseball {
                         );
                     }
 
-                    // Fielder runs to ball at realistic speed
+                    // Fielder runs to ball at realistic speed (ball stays on ground)
                     const fielderMoveDuration = Math.min(physics.timeToReachBall, physics.ballFlightTime);
                     await this.renderer.animateFielderToBall(fielder, ballLandX, ballLandY, fielderMoveDuration / this.gameSpeed);
-                    await Utils.delay(200 / this.gameSpeed);
+
+                    // Fielder picks up ball (brief pause)
+                    await Utils.delay(300 / this.gameSpeed);
 
                     // If fielder throws to base
                     if (result.throwTarget && result.baserunningPhysics) {
@@ -203,10 +206,11 @@ class EternalLeagueBaseball {
                         else if (result.throwTarget === 'third') basePos = this.renderer.thirdBase;
                         else basePos = this.renderer.homeplate;
 
+                        const pitcherPos = this.renderer.fieldPositions['P'];
                         await this.renderer.animateBallFlight(
                             basePos.x, basePos.y,
-                            this.renderer.centerX, this.renderer.centerY - 50,
-                            600 / this.gameSpeed, 40
+                            pitcherPos.x, pitcherPos.y,
+                            600 / this.gameSpeed, 40, true
                         );
                     }
                     // Hit - fielder throws back to pitcher, wait for runner
@@ -215,10 +219,11 @@ class EternalLeagueBaseball {
                             await batterRunAnimation;
                         }
 
+                        const pitcherPos = this.renderer.fieldPositions['P'];
                         await this.renderer.animateBallFlight(
                             ballLandX, ballLandY,
-                            this.renderer.centerX, this.renderer.centerY - 50,
-                            700 / this.gameSpeed, 40
+                            pitcherPos.x, pitcherPos.y,
+                            700 / this.gameSpeed, 40, true
                         );
                     }
                 }
@@ -228,8 +233,8 @@ class EternalLeagueBaseball {
                 await Utils.delay(400 / this.gameSpeed);
             }
 
-            // Pause before next pitch
-            await Utils.delay(1200 / this.gameSpeed);
+            // Pause between batters (3 seconds, affected by game speed)
+            await Utils.delay(3000 / this.gameSpeed);
         }
 
         // Game over

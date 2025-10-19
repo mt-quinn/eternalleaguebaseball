@@ -473,8 +473,9 @@ class BaseballSimulation {
     // Get fielder position in field coordinates (abstract units)
     getFielderPosition(position) {
         // Field coordinate system: home plate at (0, 0), center field at (0, 100)
+        // Pitcher now at center of diamond
         const positions = {
-            'P': { x: 0, y: 20 },
+            'P': { x: 0, y: 32 }, // Moved from 20 to center (halfway to 2nd base at ~64)
             'C': { x: 0, y: -5 },
             '1B': { x: 30, y: 30 },
             '2B': { x: 25, y: 50 },

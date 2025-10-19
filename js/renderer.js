@@ -31,8 +31,10 @@ class FieldRenderer {
         };
 
         // Fielder positions scaled proportionally
+        // Pitcher at roughly center of diamond (between home and second base)
+        const diamondCenterY = this.centerY - (this.baseDistance * Math.sqrt(2) / 2);
         this.fieldPositions = {
-            'P': { x: this.centerX, y: this.centerY - 40 },
+            'P': { x: this.centerX, y: diamondCenterY },
             'C': { x: this.centerX, y: this.centerY + 15 },
             '1B': { x: this.firstBase.x + 12, y: this.firstBase.y + 12 },
             '2B': { x: this.centerX + 45, y: this.secondBase.y + 30 },
@@ -85,10 +87,11 @@ class FieldRenderer {
         this.ctx.closePath();
         this.ctx.fill();
 
-        // Draw pitcher's mound (darker dirt)
+        // Draw pitcher's mound (darker dirt, at diamond center)
+        const moundY = this.centerY - (this.baseDistance * Math.sqrt(2) / 2);
         this.ctx.fillStyle = '#7a5c3a';
         this.ctx.beginPath();
-        this.ctx.arc(this.centerX, this.centerY - 40, 15, 0, Math.PI * 2);
+        this.ctx.arc(this.centerX, moundY, 15, 0, Math.PI * 2);
         this.ctx.fill();
 
         this.ctx.strokeStyle = '#6b4d2f';
@@ -123,20 +126,32 @@ class FieldRenderer {
         this.ctx.lineTo(this.firstBase.x, this.firstBase.y);
         this.ctx.stroke();
 
-        // Draw foul lines (extend to canvas edges)
+        // Draw foul lines (extend through first/third base to edges)
         this.ctx.strokeStyle = '#ffffff';
         this.ctx.lineWidth = 2;
 
-        // Right field line (home to right field corner)
+        // Right field line (home through first base)
+        const rightAngle = Math.atan2(
+            this.firstBase.y - this.homeplate.y,
+            this.firstBase.x - this.homeplate.x
+        );
+        const rightEndX = this.homeplate.x + Math.cos(rightAngle) * 600;
+        const rightEndY = this.homeplate.y + Math.sin(rightAngle) * 600;
         this.ctx.beginPath();
         this.ctx.moveTo(this.homeplate.x, this.homeplate.y);
-        this.ctx.lineTo(this.width - 10, 20);
+        this.ctx.lineTo(rightEndX, rightEndY);
         this.ctx.stroke();
 
-        // Left field line (home to left field corner)
+        // Left field line (home through third base)
+        const leftAngle = Math.atan2(
+            this.thirdBase.y - this.homeplate.y,
+            this.thirdBase.x - this.homeplate.x
+        );
+        const leftEndX = this.homeplate.x + Math.cos(leftAngle) * 600;
+        const leftEndY = this.homeplate.y + Math.sin(leftAngle) * 600;
         this.ctx.beginPath();
         this.ctx.moveTo(this.homeplate.x, this.homeplate.y);
-        this.ctx.lineTo(10, 20);
+        this.ctx.lineTo(leftEndX, leftEndY);
         this.ctx.stroke();
 
         // Draw bases
@@ -304,8 +319,9 @@ class FieldRenderer {
 
     // ANIMATION: Pitch (pitcher to plate)
     async animatePitch() {
-        const startX = this.centerX;
-        const startY = this.centerY - 50;
+        const pitcherPos = this.fieldPositions['P'];
+        const startX = pitcherPos.x;
+        const startY = pitcherPos.y;
         const endX = this.homeplate.x;
         const endY = this.homeplate.y - 10;
 
@@ -336,7 +352,7 @@ class FieldRenderer {
     }
 
     // ANIMATION: Batted ball with physics-based timing
-    async animateBattedBallPhysics(battedBall, endX, endY, gameSpeed) {
+    async animateBattedBallPhysics(battedBall, endX, endY, gameSpeed, clearOnEnd = true) {
         const startX = this.homeplate.x;
         const startY = this.homeplate.y - 10;
 
@@ -350,11 +366,11 @@ class FieldRenderer {
         // Use the actual flight time from physics
         const duration = battedBall.flightTime / gameSpeed;
 
-        return this.animateBallFlight(startX, startY, endX, endY, duration, arcHeight);
+        return this.animateBallFlight(startX, startY, endX, endY, duration, arcHeight, clearOnEnd);
     }
 
     // ANIMATION: Ball flight with arc (proper top-down view)
-    async animateBallFlight(startX, startY, endX, endY, duration, arcHeight) {
+    async animateBallFlight(startX, startY, endX, endY, duration, arcHeight, clearOnEnd = true) {
         this.isAnimating = true;
         const startTime = Date.now();
 
@@ -376,7 +392,12 @@ class FieldRenderer {
                 if (progress < 1) {
                     requestAnimationFrame(animate);
                 } else {
-                    this.ball = null;
+                    // Keep ball visible on ground unless clearOnEnd is true
+                    if (clearOnEnd) {
+                        this.ball = null;
+                    } else {
+                        this.ball = { x: endX, y: endY, height: 0 };
+                    }
                     this.isAnimating = false;
                     resolve();
                 }
