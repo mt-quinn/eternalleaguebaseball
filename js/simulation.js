@@ -127,7 +127,7 @@ class BaseballSimulation {
         }
 
         // 4. Contact made - determine ball trajectory
-        const batted Ball = this.resolveBattedBall(pitch);
+        const battedBall = this.resolveBattedBall(pitch);
 
         this.logPlay(`${this.currentBatter.name} makes contact! ${battedBall.description}`);
 
