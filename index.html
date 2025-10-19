@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eternal League Baseball</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Eternal League Baseball</h1>
+            <div id="coins-display">Coins: <span id="coins-amount">0</span></div>
+        </header>
+
+        <main id="game-container">
+            <!-- Pre-game Phase -->
+            <div id="pre-game-phase" class="game-phase">
+                <section id="matchup-display">
+                    <h2>Today's Matchup</h2>
+                    <div class="team-comparison">
+                        <div class="team-panel" id="player-team-panel">
+                            <h3 id="player-team-name">Your Team</h3>
+                            <div id="player-lineup"></div>
+                        </div>
+                        <div class="vs-separator">VS</div>
+                        <div class="team-panel" id="opponent-team-panel">
+                            <h3 id="opponent-team-name">Opponent</h3>
+                            <div id="opponent-lineup"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="betting-section">
+                    <h3>Place Your Bet</h3>
+                    <div class="bet-controls">
+                        <label>
+                            <input type="radio" name="bet-team" value="player" checked> Bet on Your Team
+                        </label>
+                        <label>
+                            <input type="radio" name="bet-team" value="opponent"> Bet on Opponent
+                        </label>
+                        <label>
+                            Bet Amount: <input type="number" id="bet-amount" min="0" max="100" value="10">
+                        </label>
+                        <span id="bet-ceiling">Max: <span id="max-bet">100</span></span>
+                    </div>
+                </section>
+
+                <section id="roster-management">
+                    <h3>Roster Management</h3>
+                    <button id="reorder-lineup-btn">Reorder Lineup</button>
+                    <button id="manage-snacks-btn">Manage Snacks</button>
+                </section>
+
+                <button id="start-game-btn" class="primary-button">Start Game</button>
+            </div>
+
+            <!-- Game Simulation Phase -->
+            <div id="game-phase" class="game-phase hidden">
+                <div id="game-view">
+                    <div id="scoreboard">
+                        <div class="score-panel">
+                            <span class="team-name" id="score-home-name">Home</span>
+                            <span class="score" id="score-home">0</span>
+                        </div>
+                        <div class="inning-display">
+                            <span id="inning-text">Top 1st</span>
+                        </div>
+                        <div class="score-panel">
+                            <span class="team-name" id="score-away-name">Away</span>
+                            <span class="score" id="score-away">0</span>
+                        </div>
+                    </div>
+
+                    <div id="game-state-display">
+                        <span id="outs-display">Outs: 0</span>
+                        <span id="count-display">Count: 0-0</span>
+                        <div id="bases-display">
+                            <span id="base-1" class="base empty">1B</span>
+                            <span id="base-2" class="base empty">2B</span>
+                            <span id="base-3" class="base empty">3B</span>
+                        </div>
+                    </div>
+
+                    <canvas id="field-canvas" width="800" height="600"></canvas>
+
+                    <div id="play-by-play">
+                        <h3>Play-by-Play</h3>
+                        <div id="play-log"></div>
+                    </div>
+
+                    <div id="game-controls">
+                        <button id="pause-btn">Pause</button>
+                        <button id="speed-btn">Speed: 2x</button>
+                        <button id="skip-btn">Skip to End</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Post-game Phase -->
+            <div id="post-game-phase" class="game-phase hidden">
+                <section id="game-results">
+                    <h2>Game Results</h2>
+                    <div id="final-score"></div>
+                    <div id="bet-results"></div>
+                    <div id="snack-earnings"></div>
+                </section>
+
+                <section id="post-game-actions">
+                    <button id="shop-btn" class="primary-button">Visit Shop</button>
+                    <button id="graveyard-btn">View Graveyard</button>
+                    <button id="next-day-btn" class="primary-button">Next Day</button>
+                </section>
+            </div>
+
+            <!-- Shop Modal -->
+            <div id="shop-modal" class="modal hidden">
+                <div class="modal-content">
+                    <span class="close-modal">&times;</span>
+                    <h2>Shop</h2>
+                    <div id="shop-tabs">
+                        <button class="shop-tab active" data-tab="snacks">Snacks</button>
+                        <button class="shop-tab" data-tab="upgrades">Upgrades</button>
+                        <button class="shop-tab" data-tab="roster">Roster</button>
+                    </div>
+                    <div id="shop-content"></div>
+                </div>
+            </div>
+
+            <!-- Graveyard Modal -->
+            <div id="graveyard-modal" class="modal hidden">
+                <div class="modal-content">
+                    <span class="close-modal">&times;</span>
+                    <h2>Graveyard</h2>
+                    <div id="graveyard-content"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/utils.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/team.js"></script>
+    <script src="js/simulation.js"></script>
+    <script src="js/renderer.js"></script>
+    <script src="js/economy.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>

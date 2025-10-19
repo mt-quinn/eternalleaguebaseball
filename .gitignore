@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Development
+.DS_Store
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Vercel
+.vercel/
